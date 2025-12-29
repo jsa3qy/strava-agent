@@ -5,6 +5,8 @@ This package contains modules created by the agent for commonly-used
 query patterns. Each module is registered in registry.json.
 """
 
+from __future__ import annotations
+
 import json
 import os
 from pathlib import Path

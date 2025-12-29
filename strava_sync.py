@@ -4,6 +4,8 @@ Sync Strava activities to SQLite database.
 Handles OAuth, incremental updates, and full syncs.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import sqlite3

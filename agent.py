@@ -5,6 +5,8 @@ Strava Agent - Answers questions about your Strava activities.
 Uses Claude to understand queries, write code, and execute against SQLite.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import sqlite3
