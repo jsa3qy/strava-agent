@@ -1,0 +1,13 @@
+{
+  "strava": {
+    "client_id": "YOUR_STRAVA_CLIENT_ID",
+    "client_secret": "YOUR_STRAVA_CLIENT_SECRET"
+  },
+  "slack": {
+    "bot_token": "xoxb-YOUR-BOT-TOKEN",
+    "app_token": "xapp-YOUR-APP-TOKEN"
+  },
+  "anthropic": {
+    "api_key": "YOUR_ANTHROPIC_API_KEY"
+  }
+}

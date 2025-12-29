@@ -1,0 +1,21 @@
+# Config with secrets
+config.json
+strava_tokens.json
+
+# Database
+db/*.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
