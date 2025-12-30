@@ -22,10 +22,11 @@ from agent import StravaAgent
 def markdown_to_slack(text: str) -> str:
     """Convert standard markdown to Slack's mrkdwn format."""
     # Handle code blocks first (preserve them)
+    # Use placeholders that won't be matched by markdown patterns
     code_blocks = []
     def save_code_block(match):
         code_blocks.append(match.group(0))
-        return f"__CODE_BLOCK_{len(code_blocks) - 1}__"
+        return f"\x00CODE_BLOCK_{len(code_blocks) - 1}\x00"
 
     text = re.sub(r'```[\s\S]*?```', save_code_block, text)
 
@@ -33,17 +34,13 @@ def markdown_to_slack(text: str) -> str:
     inline_codes = []
     def save_inline_code(match):
         inline_codes.append(match.group(0))
-        return f"__INLINE_CODE_{len(inline_codes) - 1}__"
+        return f"\x00INLINE_CODE_{len(inline_codes) - 1}\x00"
 
     text = re.sub(r'`[^`]+`', save_inline_code, text)
 
     # Bold: **text** or __text__ → *text*
     text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
     text = re.sub(r'__(.+?)__', r'*\1*', text)
-
-    # Italic: *text* → _text_ (but not if it's bold)
-    # This is tricky - single * for italic in MD, but * is bold in Slack
-    # We'll convert _text_ style italic which works in both
 
     # Links: [text](url) → <url|text>
     text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<\2|\1>', text)
@@ -53,11 +50,11 @@ def markdown_to_slack(text: str) -> str:
 
     # Restore code blocks
     for i, block in enumerate(code_blocks):
-        text = text.replace(f"__CODE_BLOCK_{i}__", block)
+        text = text.replace(f"\x00CODE_BLOCK_{i}\x00", block)
 
     # Restore inline code
     for i, code in enumerate(inline_codes):
-        text = text.replace(f"__INLINE_CODE_{i}__", code)
+        text = text.replace(f"\x00INLINE_CODE_{i}\x00", code)
 
     return text
 
