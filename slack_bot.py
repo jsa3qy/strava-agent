@@ -221,6 +221,15 @@ def handle_mention(event, say, client):
         # Format as blocks for better rendering
         blocks = format_response_blocks(answer)
 
+        # Add cost info
+        cost_str = agent.get_cost_string()
+        if cost_str:
+            blocks.append({"type": "divider"})
+            blocks.append({
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": f"_{cost_str}_"}]
+            })
+
         # Update with final answer
         client.chat_update(
             channel=channel,
@@ -292,6 +301,16 @@ def handle_dm(event, say, client):
     try:
         answer = agent.ask(text, on_update=update_status)
         blocks = format_response_blocks(answer)
+
+        # Add cost info
+        cost_str = agent.get_cost_string()
+        if cost_str:
+            blocks.append({"type": "divider"})
+            blocks.append({
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": f"_{cost_str}_"}]
+            })
+
         client.chat_update(
             channel=channel,
             ts=initial["ts"],

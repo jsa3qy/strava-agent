@@ -329,6 +329,12 @@ def handle_tool_call(tool_name: str, tool_input: dict) -> str:
     return json.dumps(result, indent=2, default=str)
 
 
+# Pricing per million tokens (as of 2025)
+PRICING = {
+    "claude-sonnet-4-20250514": {"input": 3.00, "output": 15.00},
+}
+
+
 class StravaAgent:
     """Agent that answers questions about Strava activities."""
 
@@ -337,6 +343,7 @@ class StravaAgent:
         self.client = anthropic.Anthropic(api_key=config["anthropic"]["api_key"])
         self.model = "claude-sonnet-4-20250514"
         self.conversation_history = []
+        self.last_usage = None  # Store usage from last ask()
 
     def ask(self, question: str, on_update=None) -> str:
         """
@@ -355,6 +362,10 @@ class StravaAgent:
         system_prompt = get_system_prompt()
         messages = self.conversation_history.copy()
 
+        # Track token usage across all API calls for this question
+        total_input_tokens = 0
+        total_output_tokens = 0
+
         while True:
             # Call Claude
             response = self.client.messages.create(
@@ -364,6 +375,10 @@ class StravaAgent:
                 tools=TOOLS,
                 messages=messages,
             )
+
+            # Accumulate token usage
+            total_input_tokens += response.usage.input_tokens
+            total_output_tokens += response.usage.output_tokens
 
             # Check if we need to handle tool calls
             if response.stop_reason == "tool_use":
@@ -394,10 +409,31 @@ class StravaAgent:
                     if hasattr(block, "text"):
                         final_text += block.text
 
+                # Store usage info
+                self.last_usage = {
+                    "input_tokens": total_input_tokens,
+                    "output_tokens": total_output_tokens,
+                    "cost": self._calculate_cost(total_input_tokens, total_output_tokens),
+                }
+
                 # Update conversation history with final exchange
                 self.conversation_history.append({"role": "assistant", "content": final_text})
 
                 return final_text
+
+    def _calculate_cost(self, input_tokens: int, output_tokens: int) -> float:
+        """Calculate cost in USD based on token usage."""
+        pricing = PRICING.get(self.model, {"input": 3.00, "output": 15.00})
+        input_cost = (input_tokens / 1_000_000) * pricing["input"]
+        output_cost = (output_tokens / 1_000_000) * pricing["output"]
+        return input_cost + output_cost
+
+    def get_cost_string(self) -> str | None:
+        """Get a formatted cost string for the last query."""
+        if not self.last_usage:
+            return None
+        u = self.last_usage
+        return f"${u['cost']:.4f} ({u['input_tokens']:,} in / {u['output_tokens']:,} out)"
 
     def clear_history(self):
         """Clear conversation history."""
@@ -429,7 +465,12 @@ def main():
         print("\nThinking...")
         try:
             answer = agent.ask(question, on_update=lambda msg: print(f"  [{msg}]"))
-            print(f"\nAgent: {answer}\n")
+            cost_str = agent.get_cost_string()
+            print(f"\nAgent: {answer}")
+            if cost_str:
+                print(f"  [{cost_str}]\n")
+            else:
+                print()
         except Exception as e:
             print(f"\nError: {e}\n")
             traceback.print_exc()
