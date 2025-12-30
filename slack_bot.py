@@ -5,6 +5,8 @@ Slack bot for Strava Agent.
 Uses Socket Mode for local development (no public URL needed).
 """
 
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -15,6 +17,107 @@ from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from agent import StravaAgent
+
+
+def markdown_to_slack(text: str) -> str:
+    """Convert standard markdown to Slack's mrkdwn format."""
+    # Handle code blocks first (preserve them)
+    code_blocks = []
+    def save_code_block(match):
+        code_blocks.append(match.group(0))
+        return f"__CODE_BLOCK_{len(code_blocks) - 1}__"
+
+    text = re.sub(r'```[\s\S]*?```', save_code_block, text)
+
+    # Inline code (preserve)
+    inline_codes = []
+    def save_inline_code(match):
+        inline_codes.append(match.group(0))
+        return f"__INLINE_CODE_{len(inline_codes) - 1}__"
+
+    text = re.sub(r'`[^`]+`', save_inline_code, text)
+
+    # Bold: **text** or __text__ → *text*
+    text = re.sub(r'\*\*(.+?)\*\*', r'*\1*', text)
+    text = re.sub(r'__(.+?)__', r'*\1*', text)
+
+    # Italic: *text* → _text_ (but not if it's bold)
+    # This is tricky - single * for italic in MD, but * is bold in Slack
+    # We'll convert _text_ style italic which works in both
+
+    # Links: [text](url) → <url|text>
+    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<\2|\1>', text)
+
+    # Headers: # text → *text* (bold, since Slack has no headers)
+    text = re.sub(r'^#{1,6}\s+(.+)$', r'*\1*', text, flags=re.MULTILINE)
+
+    # Restore code blocks
+    for i, block in enumerate(code_blocks):
+        text = text.replace(f"__CODE_BLOCK_{i}__", block)
+
+    # Restore inline code
+    for i, code in enumerate(inline_codes):
+        text = text.replace(f"__INLINE_CODE_{i}__", code)
+
+    return text
+
+
+def format_response_blocks(text: str) -> list:
+    """Format response as Slack blocks for richer display."""
+    blocks = []
+
+    # Convert markdown first
+    text = markdown_to_slack(text)
+
+    # Split on code blocks to handle them separately
+    parts = re.split(r'(```[\s\S]*?```)', text)
+
+    for part in parts:
+        if not part.strip():
+            continue
+
+        if part.startswith('```'):
+            # Code block
+            code = part.strip('`').strip()
+            # Check if there's a language specifier
+            lines = code.split('\n')
+            if lines[0] and not ' ' in lines[0] and len(lines[0]) < 20:
+                # First line might be language
+                code = '\n'.join(lines[1:]) if len(lines) > 1 else ''
+
+            if code.strip():
+                blocks.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"```{code}```"
+                    }
+                })
+        else:
+            # Regular text - split into chunks if too long (Slack limit is 3000 chars)
+            chunk_size = 2900
+            for i in range(0, len(part), chunk_size):
+                chunk = part[i:i + chunk_size].strip()
+                if chunk:
+                    blocks.append({
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": chunk
+                        }
+                    })
+
+    # Slack requires at least one block
+    if not blocks:
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": text or "Done."
+            }
+        })
+
+    return blocks
 
 # Paths
 BASE_DIR = Path(__file__).parent
@@ -115,11 +218,15 @@ def handle_mention(event, say, client):
         # Get the answer
         answer = agent.ask(text, on_update=update_status)
 
+        # Format as blocks for better rendering
+        blocks = format_response_blocks(answer)
+
         # Update with final answer
         client.chat_update(
             channel=channel,
             ts=initial["ts"],
-            text=answer,
+            text=answer,  # Fallback for notifications
+            blocks=blocks,
         )
 
     except Exception as e:
@@ -184,10 +291,12 @@ def handle_dm(event, say, client):
 
     try:
         answer = agent.ask(text, on_update=update_status)
+        blocks = format_response_blocks(answer)
         client.chat_update(
             channel=channel,
             ts=initial["ts"],
-            text=answer,
+            text=answer,  # Fallback for notifications
+            blocks=blocks,
         )
     except Exception as e:
         client.chat_update(
