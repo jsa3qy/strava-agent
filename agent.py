@@ -140,6 +140,19 @@ TOOLS = [
             "properties": {},
         },
     },
+    {
+        "name": "sync_activities",
+        "description": "Sync activities from Strava API to the local database. Use this when the user asks to update/sync their activities or wants to see their latest workouts.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "force": {
+                    "type": "boolean",
+                    "description": "If true, re-sync all activities. If false (default), only sync new activities.",
+                },
+            },
+        },
+    },
 ]
 
 
@@ -308,6 +321,35 @@ def list_available_modules() -> dict:
     return {"modules": registry["modules"]}
 
 
+def sync_activities(force: bool = False) -> dict:
+    """Sync activities from Strava API."""
+    try:
+        from strava_sync import StravaAuth, StravaSync, init_db
+
+        # Ensure database exists
+        init_db()
+
+        # Authenticate with Strava (uses cached tokens if valid)
+        auth = StravaAuth()
+        access_token = auth.authenticate()
+
+        # Sync activities
+        syncer = StravaSync(access_token)
+        added, updated = syncer.sync_all(force=force)
+
+        return {
+            "success": True,
+            "activities_added": added,
+            "activities_updated": updated,
+            "message": f"Sync complete: {added} new, {updated} updated",
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+        }
+
+
 def handle_tool_call(tool_name: str, tool_input: dict) -> str:
     """Execute a tool and return the result as a string."""
     if tool_name == "execute_sql":
@@ -323,6 +365,8 @@ def handle_tool_call(tool_name: str, tool_input: dict) -> str:
         )
     elif tool_name == "list_modules":
         result = list_available_modules()
+    elif tool_name == "sync_activities":
+        result = sync_activities(tool_input.get("force", False))
     else:
         result = {"error": f"Unknown tool: {tool_name}"}
 
