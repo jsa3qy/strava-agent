@@ -1,0 +1,17 @@
+[Unit]
+Description=Strava Agent Slack Bot
+After=network.target
+
+[Service]
+Type=simple
+User=jalloy
+WorkingDirectory=/home/jalloy/repos/strava-agent
+ExecStart=/home/jalloy/repos/strava-agent/run_strava.sh
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
