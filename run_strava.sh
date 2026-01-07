@@ -5,6 +5,18 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# --- Lock mechanism: ensure only one instance runs ---
+LOCK_FILE="/tmp/strava-agent.lock"
+exec 200>"$LOCK_FILE"
+
+if ! flock -n 200; then
+    echo "[$(date)] Another instance of Strava Agent is already running. Exiting."
+    exit 0
+fi
+
+# Lock acquired - write PID for reference
+echo $$ >&200
+
 # Activate venv if it exists
 if [ -f "$SCRIPT_DIR/venv/bin/activate" ]; then
     source "$SCRIPT_DIR/venv/bin/activate"
